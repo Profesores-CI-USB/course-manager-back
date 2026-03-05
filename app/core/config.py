@@ -1,5 +1,6 @@
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 class Settings(BaseSettings):
@@ -33,6 +34,37 @@ class Settings(BaseSettings):
     smtp_credentials_key: str = Field(default="", validation_alias="SMTP_CREDENTIALS_KEY")
 
     ai_model_name: str = Field(default="simple_nn", validation_alias="AI_MODEL_NAME")
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def ensure_async_database_url(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+
+        normalized = value
+        if normalized.startswith("postgres://"):
+            normalized = normalized.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif normalized.startswith("postgresql://") and "+asyncpg" not in normalized:
+            normalized = normalized.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        if normalized.startswith("postgresql+asyncpg://"):
+            parts = urlsplit(normalized)
+            query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+
+            has_ssl = any(key == "ssl" for key, _ in query_pairs)
+            rewritten_pairs = []
+            for key, val in query_pairs:
+                if key == "sslmode":
+                    if not has_ssl:
+                        rewritten_pairs.append(("ssl", val))
+                    continue
+                rewritten_pairs.append((key, val))
+
+            normalized = urlunsplit(
+                (parts.scheme, parts.netloc, parts.path, urlencode(rewritten_pairs, doseq=True), parts.fragment)
+            )
+
+        return normalized
 
 
 settings = Settings()

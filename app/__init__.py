@@ -1,1 +1,1 @@
-from app.main_app import app
+__all__ = []
