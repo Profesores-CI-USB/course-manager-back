@@ -1,0 +1,53 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+# Muestra la lista de comandos disponibles
+default:
+    @just --list
+
+# Ejecuta la API en modo desarrollo con recarga automática
+run:
+    source .venv/bin/activate && uvicorn main:app --reload
+
+# Instala dependencias, aplica migraciones y levanta la API
+dev-setup:
+  source .venv/bin/activate && pip install -r requirements.txt && alembic upgrade head && uvicorn main:app --reload
+
+# Crea o promueve un usuario admin (FULL_NAME es opcional)
+create-admin EMAIL PASSWORD FULL_NAME="":
+    source .venv/bin/activate && if [[ -n "{{FULL_NAME}}" ]]; then \
+      python scripts/create_admin.py --email "{{EMAIL}}" --password "{{PASSWORD}}" --full-name "{{FULL_NAME}}"; \
+    else \
+      python scripts/create_admin.py --email "{{EMAIL}}" --password "{{PASSWORD}}"; \
+    fi
+
+# Aplica todas las migraciones pendientes
+migrate-up:
+  source .venv/bin/activate && alembic upgrade head
+
+# Revierte la última migración aplicada
+migrate-down:
+  source .venv/bin/activate && alembic downgrade -1
+
+# Crea una nueva migración autogenerada (ej: just migrate-create "add roles")
+migrate-create MESSAGE:
+  source .venv/bin/activate && alembic revision --autogenerate -m "{{MESSAGE}}"
+
+# Crea una migración vacía/manual (sin autogenerate)
+migrate-create-empty MESSAGE:
+  source .venv/bin/activate && alembic revision -m "{{MESSAGE}}"
+
+# Muestra la revisión actual aplicada en la base de datos
+migrate-current:
+  source .venv/bin/activate && alembic current
+
+# Muestra historial de migraciones
+migrate-history:
+  source .venv/bin/activate && alembic history
+
+# Muestra heads de migraciones
+migrate-heads:
+  source .venv/bin/activate && alembic heads
+
+# Marca una revisión sin ejecutar migraciones (usar con cuidado)
+migrate-stamp REVISION:
+  source .venv/bin/activate && alembic stamp {{REVISION}}

@@ -7,6 +7,9 @@ Plantilla lista para usar con:
 - Redis para manejo de sesiones/refresh token
 - Autenticación JWT (`access_token` + `refresh_token`)
 - SMTP Gmail global y SMTP por usuario
+- Recuperación/cambio de contraseña
+- Roles de usuario (`admin`, `professor`)
+- Gestión académica base (materias, cursos, estudiantes, evaluaciones, inscripciones y notas)
 - Módulo base para integrar un modelo propio de IA (ejemplo: red neuronal simple)
 
 ## Estructura del proyecto
@@ -21,9 +24,10 @@ Plantilla lista para usar con:
 │   │   ├── base.py            # Base ORM de SQLAlchemy
 │   │   └── session.py         # Engine Async, sesión DB y cliente Redis
 │   ├── models/
-│   │   └── user.py            # Modelo User
+│   │   ├── user.py            # Modelo User
+│   │   └── academic.py        # Modelos académicos
 │   ├── routers/
-│   │   ├── auth.py            # Register/login/refresh/logout
+│   │   ├── auth.py            # Auth + recuperación/cambio de clave
 │   │   ├── users.py           # Perfil y credenciales SMTP por usuario
 │   │   ├── mail.py            # Envío de correo
 │   │   ├── ai.py              # Inferencia de IA
@@ -35,7 +39,10 @@ Plantilla lista para usar con:
 │   ├── main_app.py            # Creación de FastAPI e include routers
 │   └── __init__.py
 ├── .env.example
+├── justfile                   # Comandos de desarrollo
 ├── main.py                    # Entry point: expone app para uvicorn/vercel
+├── scripts/
+│   └── create_admin.py        # Script para crear/promover admin
 ├── requirements.txt
 └── README.md
 ```
@@ -80,6 +87,18 @@ docker run -d --name course-manager-redis -p 6379:6379 redis:7
 uvicorn main:app --reload
 ```
 
+También puedes usar `just`:
+
+```bash
+just run
+```
+
+Para preparar todo en un solo comando (instalar dependencias + migrar + ejecutar API):
+
+```bash
+just dev-setup
+```
+
 1. Verificar:
 
 - Health: `http://127.0.0.1:8000/health`
@@ -88,46 +107,46 @@ uvicorn main:app --reload
 > Nota: actualmente la app crea tablas al arrancar (`Base.metadata.create_all` en `init_models`).
 > En entornos productivos se recomienda usar migraciones con Alembic (sección siguiente).
 
+## Comandos útiles (`justfile`)
+
+- `just dev-setup` → instala dependencias, aplica migraciones y levanta la API.
+- `just run` → levanta la API en desarrollo.
+- `just create-admin EMAIL PASSWORD [FULL_NAME]` → crea o promueve un usuario admin.
+- `just migrate-up` → aplica todas las migraciones pendientes.
+- `just migrate-down` → revierte la última migración.
+- `just migrate-create "mensaje"` → crea migración autogenerada.
+- `just migrate-create-empty "mensaje"` → crea migración vacía/manual.
+- `just migrate-current` → muestra la revisión actual aplicada.
+- `just migrate-history` → muestra historial de migraciones.
+- `just migrate-heads` → muestra heads de migración.
+- `just migrate-stamp REVISION` → marca revisión sin ejecutar migraciones.
+
+Ejemplo:
+
+```bash
+just create-admin admin@demo.com "ClaveSegura123!" "Admin Principal"
+```
+
 ## Migraciones de base de datos (Alembic)
 
 Aunque el proyecto crea tablas automáticamente en desarrollo, puedes controlar cambios de esquema con Alembic.
 
-1. Instalar Alembic:
+El proyecto ya incluye carpeta `alembic/`, `alembic.ini` y scripts de migración.
+
+`alembic/env.py` ya está configurado para:
+
+- Leer `DATABASE_URL` desde `.env`.
+- Convertir `postgresql://` a `postgresql+asyncpg://` cuando aplica.
+- Adaptar `sslmode` a `ssl` para compatibilidad con `asyncpg`.
+
+Flujo recomendado:
 
 ```bash
-pip install alembic
-```
-
-1. Inicializar Alembic en el proyecto:
-
-```bash
-alembic init alembic
-```
-
-1. Configurar `alembic.ini`:
-
-- Cambia `sqlalchemy.url` por tu `DATABASE_URL` (Neon).
-- Si usas Neon, asegura `sslmode=require` en la URL.
-
-1. Configurar `alembic/env.py` para usar los modelos del proyecto:
-
-- Importa `Base` desde `app.db.base`.
-- Importa `app.models` para registrar metadatos.
-- Define `target_metadata = Base.metadata`.
-
-1. Crear una migración nueva (autogenerada):
-
-```bash
-alembic revision --autogenerate -m "create users table"
-```
-
-1. Aplicar migraciones:
-
-```bash
+alembic revision --autogenerate -m "mensaje"
 alembic upgrade head
 ```
 
-1. Revertir una versión (si hace falta):
+Para revertir una versión:
 
 ```bash
 alembic downgrade -1
@@ -145,9 +164,18 @@ Flujo recomendado de trabajo:
 ### Auth
 
 - `POST /api/v1/auth/register`
+- `POST /api/v1/auth/register-admin` (solo admin autenticado)
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
+- `POST /api/v1/auth/change-password`
+
+Reglas de rol:
+
+- El registro público (`/auth/register`) solo crea `professor`.
+- Solo un `admin` puede crear otro `admin` vía `/auth/register-admin`.
 
 ### Usuario y SMTP propio
 
@@ -169,6 +197,32 @@ Usa SMTP del usuario autenticado si existe; si no, usa SMTP global por `.env`.
 - `POST /api/v1/ai/predict`
 
 Modelo actual: `simple_nn` (red neuronal mínima de ejemplo, 3 features).
+
+## Modelo académico (tablas)
+
+Tablas creadas en inglés:
+
+- `subjects`
+- `courses`
+- `students`
+- `evaluations`
+- `enrollments`
+- `evaluation_grades`
+
+Reglas principales:
+
+- `subjects.code` es único.
+- `students.student_card` usa formato `XX-XXXXX`.
+- `courses.term` permitido: `april-july`, `january-march`, `september-december`, `summer`.
+- `evaluations.evaluation_type` permitido: `exam`, `homework`, `workshop`, `project`, `report`, `presentation`, `video`.
+- Notas (`grade`, `final_grade`) en rango `0-100`.
+
+## Variables nuevas de entorno
+
+Además de las variables existentes, ahora se usan:
+
+- `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default `30`)
+- `FRONTEND_URL` (para link de recuperación; default `http://localhost:5173`)
 
 ## Cómo agregar y entrenar modelos propios de IA
 
