@@ -51,6 +51,15 @@ def create_refresh_token(subject: str) -> tuple[str, str]:
     )
 
 
+def create_password_reset_token(subject: str) -> str:
+    token, _ = _build_token(
+        subject=subject,
+        token_type="password_reset",
+        expires_delta=timedelta(minutes=settings.password_reset_token_expire_minutes),
+    )
+    return token
+
+
 def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])

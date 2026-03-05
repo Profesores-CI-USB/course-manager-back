@@ -4,7 +4,7 @@ from typing import Literal
 
 from sqlalchemy import CheckConstraint, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -36,3 +36,5 @@ class User(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+    courses_taught: Mapped[list["Course"]] = relationship(back_populates="professor")

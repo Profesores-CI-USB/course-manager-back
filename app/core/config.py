@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     project_name: str = Field(default="Course Manager Backend", validation_alias="PROJECT_NAME")
     api_v1_prefix: str = Field(default="/api/v1", validation_alias="API_V1_PREFIX")
+    frontend_url: str = Field(default="http://localhost:5173", validation_alias="FRONTEND_URL")
 
     database_url: str = Field(
         default="postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=30, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=7, validation_alias="REFRESH_TOKEN_EXPIRE_DAYS")
+    password_reset_token_expire_minutes: int = Field(
+        default=30,
+        validation_alias="PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",
+    )
 
     smtp_host: str = Field(default="smtp.gmail.com", validation_alias="SMTP_HOST")
     smtp_port: int = Field(default=587, validation_alias="SMTP_PORT")
