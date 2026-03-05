@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import CheckConstraint, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,10 +11,19 @@ from app.db.base import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'professor')", name="ck_users_role"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[Literal["admin", "professor"]] = mapped_column(
+        String(20),
+        nullable=False,
+        default="professor",
+        server_default=text("'professor'"),
+    )
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
 
     smtp_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

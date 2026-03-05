@@ -16,6 +16,7 @@ def to_user_out(user: User) -> UserOut:
         id=user.id,
         email=user.email,
         full_name=user.full_name,
+        role=user.role,
         smtp_configured=bool(user.smtp_email and user.smtp_password_encrypted),
         created_at=user.created_at,
     )

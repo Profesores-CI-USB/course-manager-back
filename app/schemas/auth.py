@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Literal
 
 from app.schemas.user import UserOut
 
@@ -7,6 +8,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str | None = None
+    role: Literal["admin", "professor"] = "professor"
 
 
 class LoginRequest(BaseModel):
