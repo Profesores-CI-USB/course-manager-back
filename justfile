@@ -48,6 +48,25 @@ migrate-history:
 migrate-heads:
   source .venv/bin/activate && alembic heads
 
+# Muestra estado resumido de migraciones (current + heads)
+migrate-status:
+  source .venv/bin/activate && alembic current && alembic heads
+
 # Marca una revisión sin ejecutar migraciones (usar con cuidado)
 migrate-stamp REVISION:
   source .venv/bin/activate && alembic stamp {{REVISION}}
+
+# Marca la base en el head actual sin ejecutar migraciones (usar con cuidado)
+migrate-stamp-head:
+  source .venv/bin/activate && alembic stamp head
+
+# Crea migración autogenerada garantizando que la DB esté en head primero
+migrate-create-safe MESSAGE:
+  source .venv/bin/activate && alembic upgrade head && alembic revision --autogenerate -m "{{MESSAGE}}"
+
+# Sube o baja a una revisión específica
+migrate-up-to REVISION:
+  source .venv/bin/activate && alembic upgrade {{REVISION}}
+
+migrate-down-to REVISION:
+  source .venv/bin/activate && alembic downgrade {{REVISION}}

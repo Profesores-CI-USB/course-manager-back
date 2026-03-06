@@ -76,6 +76,7 @@ class Student(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     student_card: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
 
     __table_args__ = (
         CheckConstraint("student_card ~ '^[0-9]{2}-[0-9]{5}$'", name="ck_students_student_card_format"),

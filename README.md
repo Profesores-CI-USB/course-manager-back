@@ -119,7 +119,12 @@ just dev-setup
 - `just migrate-current` → muestra la revisión actual aplicada.
 - `just migrate-history` → muestra historial de migraciones.
 - `just migrate-heads` → muestra heads de migración.
+- `just migrate-status` → muestra `current` y `heads` juntos.
 - `just migrate-stamp REVISION` → marca revisión sin ejecutar migraciones.
+- `just migrate-stamp-head` → marca en `head` sin ejecutar migraciones.
+- `just migrate-create-safe "mensaje"` → hace `upgrade head` y luego autogenera revisión.
+- `just migrate-up-to REVISION` → sube a una revisión específica.
+- `just migrate-down-to REVISION` → baja a una revisión específica.
 
 Ejemplo:
 
@@ -146,6 +151,13 @@ alembic revision --autogenerate -m "mensaje"
 alembic upgrade head
 ```
 
+Alternativa con `just` (recomendada para evitar desalineación):
+
+```bash
+just migrate-create-safe "mensaje"
+just migrate-up
+```
+
 Para revertir una versión:
 
 ```bash
@@ -158,6 +170,71 @@ Flujo recomendado de trabajo:
 - Genera revisión con `--autogenerate`.
 - Revisa el script generado antes de aplicarlo.
 - Ejecuta `alembic upgrade head`.
+
+### Alterar tablas existentes con Alembic
+
+Para cambios tipo `ALTER TABLE` (agregar columnas, backfill, cambiar nulabilidad), se recomienda migración manual o ajustar la autogenerada.
+
+Ejemplo seguro al agregar columna requerida `email` en `students`:
+
+```python
+def upgrade() -> None:
+    op.add_column("students", sa.Column("email", sa.String(length=255), nullable=True))
+    op.execute("UPDATE students SET email = student_card || '@usb.ve' WHERE email IS NULL")
+    op.alter_column("students", "email", nullable=False)
+    op.create_index(op.f("ix_students_email"), "students", ["email"], unique=True)
+
+
+def downgrade() -> None:
+    op.drop_index(op.f("ix_students_email"), table_name="students")
+    op.drop_column("students", "email")
+```
+
+Regla práctica:
+
+- Si ya existen filas, no agregues una columna `NOT NULL` directamente.
+- Primero `nullable=True`, luego `UPDATE` para backfill, luego `alter_column(..., nullable=False)`.
+
+### Resolver conflictos comunes de Alembic
+
+Caso típico:
+
+- Error: `DuplicateTableError: relation "subjects" already exists`.
+
+Esto ocurre cuando las tablas se crearon fuera de Alembic (por ejemplo con `create_all`) pero `alembic_version` va atrasado.
+
+Pasos recomendados:
+
+1. Ver estado:
+
+```bash
+just migrate-status
+```
+
+1. Si el esquema real ya contiene lo de una migración pendiente, sincroniza historial sin ejecutar SQL:
+
+```bash
+just migrate-stamp 3c12f0b7d1aa
+```
+
+O para marcar al último estado del repo:
+
+```bash
+just migrate-stamp-head
+```
+
+1. Crea y aplica la siguiente migración:
+
+```bash
+just migrate-create "add email to students"
+just migrate-up
+```
+
+Notas importantes:
+
+- `stamp` no cambia tablas; solo actualiza `alembic_version`.
+- Usa `stamp` solo cuando verificaste que la DB ya está estructuralmente alineada con esa revisión.
+- Si no está alineada, corrige esquema o aplica migraciones reales en vez de estampar.
 
 ## Endpoints principales
 

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.db.session import close_redis, init_models, redis_client
-from app.routers import ai_router, auth_router, health_router, mail_router, users_router
+from app.routers import academic_router, ai_router, auth_router, health_router, mail_router, users_router
 
 
 @asynccontextmanager
@@ -27,6 +27,7 @@ app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(users_router, prefix=settings.api_v1_prefix)
 app.include_router(mail_router, prefix=settings.api_v1_prefix)
 app.include_router(ai_router, prefix=settings.api_v1_prefix)
+app.include_router(academic_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")
