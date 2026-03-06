@@ -1,379 +1,361 @@
-# Plantilla Backend FastAPI
+# Course Manager Backend (FastAPI)
 
-Plantilla lista para usar con:
+Backend para gestion academica con autenticacion JWT, Redis para sesiones de refresh, correo SMTP y endpoints de dominio academico.
+
+## Stack
 
 - FastAPI
-- Postgres en Neon (vía `DATABASE_URL` con `sslmode=require`)
-- Redis para manejo de sesiones/refresh token
-- Autenticación JWT (`access_token` + `refresh_token`)
-- SMTP Gmail global y SMTP por usuario
-- Recuperación/cambio de contraseña
-- Roles de usuario (`admin`, `professor`)
-- Gestión académica base (materias, cursos, estudiantes, evaluaciones, inscripciones y notas)
-- Módulo base para integrar un modelo propio de IA (ejemplo: red neuronal simple)
+- SQLAlchemy Async + PostgreSQL (Neon compatible)
+- Alembic
+- Redis
+- JWT (`access` + `refresh`)
+- SMTP global + credenciales SMTP por usuario
 
-## Estructura del proyecto
+## Funcionalidades
+
+- Autenticacion completa:
+- registro publico de profesores
+- registro de admins (solo por admin autenticado)
+- login, refresh, logout
+- recuperacion y cambio de clave
+- Perfil de usuario y credenciales SMTP por usuario.
+- Modulo academico:
+- materias, cursos, estudiantes
+- evaluaciones, inscripciones, notas por evaluacion
+- listados con filtros, paginacion y ordenamiento
+- actualizaciones por ID
+- carga masiva CSV de estudiantes por `course_id`
+- Endpoint base de IA (`/ai/predict`) con modelo de ejemplo.
+
+## Arquitectura
+
+Estructura principal:
 
 ```text
 .
 ├── app/
 │   ├── core/
-│   │   ├── config.py          # Variables de entorno y configuración global
-│   │   └── security.py        # JWT, hash de password, cifrado SMTP
 │   ├── db/
-│   │   ├── base.py            # Base ORM de SQLAlchemy
-│   │   └── session.py         # Engine Async, sesión DB y cliente Redis
 │   ├── models/
-│   │   ├── user.py            # Modelo User
-│   │   └── academic.py        # Modelos académicos
 │   ├── routers/
-│   │   ├── auth.py            # Auth + recuperación/cambio de clave
-│   │   ├── users.py           # Perfil y credenciales SMTP por usuario
-│   │   ├── mail.py            # Envío de correo
-│   │   ├── ai.py              # Inferencia de IA
-│   │   └── health.py          # Health check
-│   ├── schemas/               # DTOs de request/response
+│   ├── schemas/
 │   ├── services/
-│   │   ├── mail_service.py    # Lógica SMTP
-│   │   └── ai_model.py        # Registro e inferencia de modelos IA
-│   ├── main_app.py            # Creación de FastAPI e include routers
-│   └── __init__.py
-├── .env.example
-├── justfile                   # Comandos de desarrollo
-├── main.py                    # Entry point: expone app para uvicorn/vercel
+│   └── main_app.py
+├── alembic/
 ├── scripts/
-│   └── create_admin.py        # Script para crear/promover admin
-├── requirements.txt
+├── justfile
+├── main.py
 └── README.md
 ```
 
-## Cómo ejecutar el proyecto
+Notas:
 
-1. Crear entorno virtual e instalar dependencias:
+- `app/routers/auth.py` y `app/routers/academic.py` estan en modo "thin router": exponen endpoints y delegan la logica de negocio a `app/services`.
+- `app/main_app.py` incluye routers bajo `API_V1_PREFIX` (default: `/api/v1`), excepto `health`.
+- Al iniciar, la app ejecuta `init_models()` (creacion de tablas en desarrollo) y valida conexion a Redis.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+## Requisitos
 
-1. Copiar variables de entorno:
+- Python 3.11+
+- Redis (local o remoto)
+- PostgreSQL (local o Neon)
 
-```bash
-cp .env.example .env
-```
+## Variables de entorno
 
-1. Completar al menos estas variables en `.env`:
+Base recomendada: copia `.env.example` a `.env`.
 
-- `DATABASE_URL` (Neon)
-- `REDIS_URL`
+Variables clave:
+
+- `PROJECT_NAME` (default: `Course Manager Backend`)
+- `API_V1_PREFIX` (default: `/api/v1`)
+- `FRONTEND_URL` (default: `http://localhost:5173`)
+- `DATABASE_URL`
+- `REDIS_URL` (default: `redis://localhost:6379/0`)
 - `JWT_SECRET_KEY`
-- `SMTP_CREDENTIALS_KEY` (Fernet)
-
-Opcional (SMTP global fallback):
-
+- `JWT_ALGORITHM` (default: `HS256`)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` (default: `30`)
+- `REFRESH_TOKEN_EXPIRE_DAYS` (default: `7`)
+- `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default: `30`)
+- `SMTP_HOST` (default: `smtp.gmail.com`)
+- `SMTP_PORT` (default: `587`)
+- `SMTP_USE_TLS` (default: `true`)
 - `MAIL_DEFAULT_SENDER`
 - `MAIL_DEFAULT_PASSWORD`
+- `SMTP_CREDENTIALS_KEY` (para cifrar password SMTP de usuario)
+- `AI_MODEL_NAME` (default: `simple_nn`)
 
-1. Iniciar Redis local (si no usas uno remoto):
+Importante sobre SMTP:
+
+- En SMTP por usuario solo se configuran `smtp_email` y `smtp_password`.
+- `host`, `port` y `use_tls` siempre se toman de la configuracion global (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`).
+
+## Ejecucion local
+
+1. Crear y activar entorno virtual.
+2. Instalar dependencias.
+3. Levantar Postgres y Redis (Docker recomendado).
+4. Configurar `.env`.
+5. Ejecutar API.
+
+### Opcion recomendada: Docker Compose
+
+El repo ahora incluye `docker-compose.yml` con:
+
+- `postgres` en `localhost:5432`
+- `redis` en `localhost:6379`
+
+Levantar servicios:
+
+```bash
+docker compose up -d
+```
+
+Con `just`:
+
+```bash
+just infra-up
+```
+
+Ver estado:
+
+```bash
+docker compose ps
+```
+
+Detener servicios:
+
+```bash
+docker compose down
+```
+
+Con `just`:
+
+```bash
+just infra-down
+```
+
+Limpiar infraestructura de desarrollo (contenedores, red y volumenes del compose):
+
+```bash
+just infra-clean
+```
+
+Para usar esos contenedores en desarrollo, en `.env` usa:
+
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+REDIS_URL=redis://localhost:6379/0
+```
+
+### Opcion alternativa: contenedores separados
+
+Postgres:
+
+```bash
+docker run -d --name course-manager-postgres \
+	-e POSTGRES_DB=postgres \
+	-e POSTGRES_USER=postgres \
+	-e POSTGRES_PASSWORD=postgres \
+	-p 5432:5432 postgres:16-alpine
+```
+
+Redis:
 
 ```bash
 docker run -d --name course-manager-redis -p 6379:6379 redis:7
 ```
 
-1. Ejecutar la API:
+Comandos:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-También puedes usar `just`:
-
-```bash
-just run
-```
-
-Para preparar todo en un solo comando (instalar dependencias + migrar + ejecutar API):
-
-```bash
-just dev-setup
-```
-
-1. Verificar:
+Accesos:
 
 - Health: `http://127.0.0.1:8000/health`
-- Swagger: `http://127.0.0.1:8000/docs`
+- Docs: `http://127.0.0.1:8000/docs`
 
-> Nota: actualmente la app crea tablas al arrancar (`Base.metadata.create_all` en `init_models`).
-> En entornos productivos se recomienda usar migraciones con Alembic (sección siguiente).
+## Comandos utiles (`justfile`)
 
-## Comandos útiles (`justfile`)
+- `just run`
+- `just dev-setup`
+- `just infra-up`
+- `just infra-down`
+- `just infra-clean`
+- `just create-admin EMAIL PASSWORD [FULL_NAME]`
+- `just migrate-up`
+- `just migrate-down`
+- `just migrate-create "mensaje"`
+- `just migrate-create-empty "mensaje"`
+- `just migrate-current`
+- `just migrate-history`
+- `just migrate-heads`
+- `just migrate-status`
+- `just migrate-stamp REVISION`
+- `just migrate-stamp-head`
+- `just migrate-create-safe "mensaje"`
+- `just migrate-up-to REVISION`
+- `just migrate-down-to REVISION`
 
-- `just dev-setup` → instala dependencias, aplica migraciones y levanta la API.
-- `just run` → levanta la API en desarrollo.
-- `just create-admin EMAIL PASSWORD [FULL_NAME]` → crea o promueve un usuario admin.
-- `just migrate-up` → aplica todas las migraciones pendientes.
-- `just migrate-down` → revierte la última migración.
-- `just migrate-create "mensaje"` → crea migración autogenerada.
-- `just migrate-create-empty "mensaje"` → crea migración vacía/manual.
-- `just migrate-current` → muestra la revisión actual aplicada.
-- `just migrate-history` → muestra historial de migraciones.
-- `just migrate-heads` → muestra heads de migración.
-- `just migrate-status` → muestra `current` y `heads` juntos.
-- `just migrate-stamp REVISION` → marca revisión sin ejecutar migraciones.
-- `just migrate-stamp-head` → marca en `head` sin ejecutar migraciones.
-- `just migrate-create-safe "mensaje"` → hace `upgrade head` y luego autogenera revisión.
-- `just migrate-up-to REVISION` → sube a una revisión específica.
-- `just migrate-down-to REVISION` → baja a una revisión específica.
-
-Ejemplo:
-
-```bash
-just create-admin admin@demo.com "ClaveSegura123!" "Admin Principal"
-```
-
-## Migraciones de base de datos (Alembic)
-
-Aunque el proyecto crea tablas automáticamente en desarrollo, puedes controlar cambios de esquema con Alembic.
-
-El proyecto ya incluye carpeta `alembic/`, `alembic.ini` y scripts de migración.
-
-`alembic/env.py` ya está configurado para:
-
-- Leer `DATABASE_URL` desde `.env`.
-- Convertir `postgresql://` a `postgresql+asyncpg://` cuando aplica.
-- Adaptar `sslmode` a `ssl` para compatibilidad con `asyncpg`.
+## Migraciones (Alembic)
 
 Flujo recomendado:
 
 ```bash
-alembic revision --autogenerate -m "mensaje"
-alembic upgrade head
-```
-
-Alternativa con `just` (recomendada para evitar desalineación):
-
-```bash
-just migrate-create-safe "mensaje"
+just migrate-create-safe "descripcion corta"
 just migrate-up
 ```
 
-Para revertir una versión:
-
-```bash
-alembic downgrade -1
-```
-
-Flujo recomendado de trabajo:
-
-- Modifica modelos en `app/models`.
-- Genera revisión con `--autogenerate`.
-- Revisa el script generado antes de aplicarlo.
-- Ejecuta `alembic upgrade head`.
-
-### Alterar tablas existentes con Alembic
-
-Para cambios tipo `ALTER TABLE` (agregar columnas, backfill, cambiar nulabilidad), se recomienda migración manual o ajustar la autogenerada.
-
-Ejemplo seguro al agregar columna requerida `email` en `students`:
-
-```python
-def upgrade() -> None:
-    op.add_column("students", sa.Column("email", sa.String(length=255), nullable=True))
-    op.execute("UPDATE students SET email = student_card || '@usb.ve' WHERE email IS NULL")
-    op.alter_column("students", "email", nullable=False)
-    op.create_index(op.f("ix_students_email"), "students", ["email"], unique=True)
-
-
-def downgrade() -> None:
-    op.drop_index(op.f("ix_students_email"), table_name="students")
-    op.drop_column("students", "email")
-```
-
-Regla práctica:
-
-- Si ya existen filas, no agregues una columna `NOT NULL` directamente.
-- Primero `nullable=True`, luego `UPDATE` para backfill, luego `alter_column(..., nullable=False)`.
-
-### Resolver conflictos comunes de Alembic
-
-Caso típico:
-
-- Error: `DuplicateTableError: relation "subjects" already exists`.
-
-Esto ocurre cuando las tablas se crearon fuera de Alembic (por ejemplo con `create_all`) pero `alembic_version` va atrasado.
-
-Pasos recomendados:
-
-1. Ver estado:
+Chequeo de estado:
 
 ```bash
 just migrate-status
 ```
 
-1. Si el esquema real ya contiene lo de una migración pendiente, sincroniza historial sin ejecutar SQL:
+Resolver desalineacion tipica (`DuplicateTableError` por tablas ya existentes fuera de Alembic):
 
-```bash
-just migrate-stamp 3c12f0b7d1aa
-```
+1. Confirmar estado con `just migrate-status`.
+2. Si el esquema ya esta aplicado en DB, marcar revision sin ejecutar SQL con `just migrate-stamp REVISION` o `just migrate-stamp-head`.
+3. Generar la siguiente migracion y aplicarla.
 
-O para marcar al último estado del repo:
+Regla para cambios `NOT NULL` en tablas con datos:
 
-```bash
-just migrate-stamp-head
-```
+1. Agregar columna nullable.
+2. Hacer backfill.
+3. Cambiar a non-null.
 
-1. Crea y aplica la siguiente migración:
+## API
 
-```bash
-just migrate-create "add email to students"
-just migrate-up
-```
+### Auth (`/api/v1/auth`)
 
-Notas importantes:
+- `POST /register`
+- `POST /register-admin`
+- `POST /login`
+- `POST /refresh`
+- `POST /logout`
+- `POST /forgot-password`
+- `POST /reset-password`
+- `POST /change-password`
 
-- `stamp` no cambia tablas; solo actualiza `alembic_version`.
-- Usa `stamp` solo cuando verificaste que la DB ya está estructuralmente alineada con esa revisión.
-- Si no está alineada, corrige esquema o aplica migraciones reales en vez de estampar.
+Reglas:
 
-## Endpoints principales
+- `register` publico crea usuarios con rol `professor`.
+- `register-admin` requiere usuario autenticado con rol `admin`.
 
-### Auth
+### Users (`/api/v1/users`)
 
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/register-admin` (solo admin autenticado)
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/forgot-password`
-- `POST /api/v1/auth/reset-password`
-- `POST /api/v1/auth/change-password`
+- `GET /me`
+- `GET /me/smtp`
+- `PUT /me/smtp`
 
-Reglas de rol:
+### Mail (`/api/v1/mail`)
 
-- El registro público (`/auth/register`) solo crea `professor`.
-- Solo un `admin` puede crear otro `admin` vía `/auth/register-admin`.
+- `POST /send`
 
-### Usuario y SMTP propio
+Comportamiento SMTP:
 
-- `GET /api/v1/users/me`
-- `GET /api/v1/users/me/smtp`
-- `PUT /api/v1/users/me/smtp`
+- Si el usuario tiene SMTP propio configurado, se usa ese usuario/password.
+- Si no, se usa SMTP global (`MAIL_DEFAULT_SENDER`/`MAIL_DEFAULT_PASSWORD`).
+- `SMTP_HOST`, `SMTP_PORT` y `SMTP_USE_TLS` siempre son globales.
 
-> La contraseña SMTP del usuario se guarda cifrada (Fernet) en la base de datos.
-> En SMTP por usuario solo varían correo y contraseña; host, puerto y TLS se toman de la configuración global (`.env`).
+### AI (`/api/v1/ai`)
 
-### Correo
+- `POST /predict`
 
-- `POST /api/v1/mail/send`
+### Academic (`/api/v1/academic`)
 
-Usa SMTP del usuario autenticado si existe; si no, usa SMTP global por `.env`.
+Creacion:
 
-### IA
+- `POST /subjects`
+- `POST /courses`
+- `POST /students`
+- `POST /evaluations`
+- `POST /enrollments`
+- `POST /evaluation-grades`
+- `POST /enrollments/bulk-csv` (multipart form)
 
-- `POST /api/v1/ai/predict`
+Lectura con filtros/paginacion/orden:
 
-Modelo actual: `simple_nn` (red neuronal mínima de ejemplo, 3 features).
+- `GET /subjects`
+- `GET /courses`
+- `GET /students`
+- `GET /evaluations`
+- `GET /enrollments`
+- `GET /evaluation-grades`
 
-## Modelo académico (tablas)
+Parametros comunes de listados:
 
-Tablas creadas en inglés:
+- `limit` (1-200)
+- `offset` (>= 0)
+- `order_dir` (`asc` o `desc`)
 
-- `subjects`
-- `courses`
-- `students`
-- `evaluations`
-- `enrollments`
-- `evaluation_grades`
+`order_by` soportado por endpoint:
 
-Reglas principales:
+- `subjects`: `code`, `name`, `credits`
+- `courses`: `year`, `term`, `subject_id`, `professor_id`
+- `students`: `full_name`, `student_card`, `email`
+- `evaluations`: `due_date`, `percentage`, `evaluation_type`
+- `enrollments`: `id`, `final_grade`
+- `evaluation-grades`: `id`, `grade`
 
-- `subjects.code` es único.
-- `students.student_card` usa formato `XX-XXXXX`.
-- `courses.term` permitido: `april-july`, `january-march`, `september-december`, `summer`.
-- `evaluations.evaluation_type` permitido: `exam`, `homework`, `workshop`, `project`, `report`, `presentation`, `video`.
-- Notas (`grade`, `final_grade`) en rango `0-100`.
+Actualizacion por ID:
 
-## Variables nuevas de entorno
+- `PUT /subjects/{subject_id}`
+- `PUT /courses/{course_id}`
+- `PUT /students/{student_id}`
+- `PUT /evaluations/{evaluation_id}`
+- `PUT /enrollments/{enrollment_id}`
+- `PUT /evaluation-grades/{evaluation_grade_id}`
 
-Además de las variables existentes, ahora se usan:
+Reglas de negocio academicas:
 
-- `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default `30`)
-- `FRONTEND_URL` (para link de recuperación; default `http://localhost:5173`)
+- `subjects.code` unico.
+- `students.student_card` unico.
+- `students.email` unico. Si no se envia, se autogenera como `"{student_card}@usb.ve"`.
+- En notas por evaluacion, `grade` no puede ser mayor a `evaluation.percentage`.
+- En `evaluation_grades`, evaluacion e inscripcion deben pertenecer al mismo curso.
 
-## Cómo agregar y entrenar modelos propios de IA
+## RBAC academico
 
-### 1) Crear y entrenar tu modelo
+Visibilidad en listados:
 
-Recomendación práctica:
+- `admin`: ve todo.
+- `professor`: ve solo data relacionada a sus cursos (cursos, evaluaciones, inscripciones, notas, estudiantes vinculados y materias vinculadas).
 
-- Crea un script de entrenamiento, por ejemplo: `app/services/train_my_model.py`.
-- Entrena con tus datos (scikit-learn, PyTorch, TensorFlow, etc.).
-- Guarda el artefacto del modelo en disco (ejemplo: `artifacts/my_model.pkl` o `artifacts/model.pt`).
+Edicion:
 
-Ejemplo de flujo mínimo con scikit-learn:
+- `subjects` y `students`: cualquier usuario autenticado.
+- `courses`, `evaluations`, `enrollments`, `evaluation-grades`: `admin` puede editar cualquiera.
+- `courses`, `evaluations`, `enrollments`, `evaluation-grades`: `professor` solo puede editar entidades de sus cursos.
 
-```python
-# app/services/train_my_model.py
-from sklearn.linear_model import LogisticRegression
-from sklearn.datasets import make_classification
-import joblib
+## Carga masiva CSV de inscripciones
 
-X, y = make_classification(n_samples=500, n_features=8, random_state=42)
-model = LogisticRegression(max_iter=1000)
-model.fit(X, y)
-joblib.dump(model, "artifacts/my_model.pkl")
-```
+Endpoint:
 
-### 2) Integrarlo en la API
+- `POST /api/v1/academic/enrollments/bulk-csv`
 
-En `app/services/ai_model.py`:
+`multipart/form-data` esperado:
 
-1. Crea una clase que herede de `BaseInferenceModel`.
-2. Carga el artefacto entrenado en `__init__`.
-3. Implementa `predict(features)`.
-4. Registra la clase en `MODELS`.
+- campo `course_id` (UUID)
+- campo `file` (`.csv`)
 
-Ejemplo:
+Encabezados validos CSV:
 
-```python
-class MySklearnModel(BaseInferenceModel):
-    name = "my_sklearn_model"
+- carnet: `carnet` o `student_card`
+- nombre: `nombre`, `full_name` o `name`
 
-    def __init__(self):
-        import joblib
-        self.model = joblib.load("artifacts/my_model.pkl")
+Comportamiento:
 
-    def predict(self, features: list[float]) -> dict:
-        score = float(self.model.predict_proba([features])[0][1])
-        return {
-            "model": self.name,
-            "score": round(score, 6),
-            "label": "positive" if score >= 0.5 else "negative",
-        }
+- Crea estudiante si no existe (email default `carnet@usb.ve`).
+- Si estudiante ya existe, lo reutiliza.
+- Crea inscripcion si no existe.
+- Devuelve contadores y errores por fila.
 
-MODELS["my_sklearn_model"] = MySklearnModel()
-```
+## Notas de despliegue
 
-### 3) Activarlo por configuración
-
-En `.env`:
-
-```env
-AI_MODEL_NAME=my_sklearn_model
-```
-
-### 4) Buenas prácticas para entrenamiento
-
-- Separa entrenamiento de inferencia (no entrenar dentro de endpoints).
-- Versiona artefactos (`my_model_v1.pkl`, `my_model_v2.pkl`).
-- Guarda métricas (accuracy, F1, AUC) y fecha de entrenamiento.
-- Valida tamaño y orden de `features` para mantener compatibilidad.
-- Si el modelo es pesado, cárgalo una sola vez en memoria al iniciar la app.
-
-## Notas para Gmail SMTP
-
-- Host: `smtp.gmail.com`
-- Puerto TLS: `587`
-- Recomendado usar **App Password** (no la contraseña normal)
-- Requiere 2FA en la cuenta Gmail para App Password
+- Existe `vercel.json` para despliegue en Vercel.
+- Para produccion se recomienda depender de Alembic como fuente de verdad de esquema y evitar `create_all` en runtime.

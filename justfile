@@ -12,6 +12,18 @@ run:
 dev-setup:
   source .venv/bin/activate && pip install -r requirements.txt && alembic upgrade head && uvicorn main:app --reload
 
+# Levanta Postgres y Redis definidos en docker-compose.yml
+infra-up:
+  docker compose up -d
+
+# Detiene los servicios de infraestructura
+infra-down:
+  docker compose down
+
+# Limpia infraestructura: baja servicios y elimina volumenes/recursos huerfanos
+infra-clean:
+  docker compose down --volumes --remove-orphans
+
 # Crea o promueve un usuario admin (FULL_NAME es opcional)
 create-admin EMAIL PASSWORD FULL_NAME="":
     source .venv/bin/activate && if [[ -n "{{FULL_NAME}}" ]]; then \
