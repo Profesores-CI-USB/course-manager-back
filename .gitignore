@@ -14,3 +14,7 @@ venv.bak/
 
 # VS Code settings
 .vscode/
+
+# Claudia AI files
+.claudia/
+.claude/
