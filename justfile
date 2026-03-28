@@ -24,6 +24,10 @@ infra-down:
 infra-clean:
   docker compose down --volumes --remove-orphans
 
+# Genera una nueva clave Fernet para SMTP_CREDENTIALS_KEY
+generate-fernet-key:
+    source .venv/bin/activate && python scripts/generate_fernet_key.py
+
 # Crea o promueve un usuario admin (FULL_NAME es opcional)
 create-admin EMAIL PASSWORD FULL_NAME="":
     source .venv/bin/activate && if [[ -n "{{FULL_NAME}}" ]]; then \
