@@ -23,18 +23,13 @@ from app.services import auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    return await auth_service.register_public(db=db, payload=payload)
-
-
-@router.post("/register-admin", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register_admin(
+@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def create_user(
     payload: RegisterRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await auth_service.register_admin(db=db, current_user=current_user, payload=payload)
+    return await auth_service.create_user(db=db, current_user=current_user, payload=payload)
 
 
 @router.post("/login", response_model=AuthResponse)

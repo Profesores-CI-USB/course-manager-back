@@ -61,34 +61,11 @@ def _to_user_out(user: User) -> UserOut:
     )
 
 
-async def register_public(db: AsyncSession, payload: RegisterRequest) -> UserOut:
-    if payload.role == "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No se permite crear admins en el registro público",
-        )
-
-    exists = await db.execute(select(User).where(User.email == payload.email))
-    if exists.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El correo ya está registrado")
-
-    user = User(
-        email=payload.email,
-        full_name=payload.full_name,
-        role="professor",
-        hashed_password=hash_password(payload.password),
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return _to_user_out(user)
-
-
-async def register_admin(db: AsyncSession, current_user: User, payload: RegisterRequest) -> UserOut:
+async def create_user(db: AsyncSession, current_user: User, payload: RegisterRequest) -> UserOut:
     if not _is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo un admin puede crear otro admin",
+            detail="Solo un admin puede crear usuarios",
         )
 
     exists = await db.execute(select(User).where(User.email == payload.email))
@@ -98,7 +75,7 @@ async def register_admin(db: AsyncSession, current_user: User, payload: Register
     user = User(
         email=payload.email,
         full_name=payload.full_name,
-        role="admin",
+        role=payload.role,
         hashed_password=hash_password(payload.password),
     )
     db.add(user)

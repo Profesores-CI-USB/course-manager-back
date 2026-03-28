@@ -12,6 +12,7 @@ just run                              # Start API with hot reload (uvicorn)
 just infra-up                         # Start Docker services (Postgres + Redis)
 just infra-down                       # Stop Docker services
 just dev-setup                        # Full dev environment setup
+just generate-fernet-key              # Generate a new Fernet key for encrypting SMTP credentials
 
 # Migrations
 just migrate-up                       # Apply all pending migrations
