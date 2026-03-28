@@ -64,25 +64,55 @@ Notas:
 
 Base recomendada: copia `.env.example` a `.env`.
 
-Variables clave:
+### `.env` para desarrollo (Docker Compose)
 
-- `PROJECT_NAME` (default: `Course Manager Backend`)
-- `API_V1_PREFIX` (default: `/api/v1`)
-- `FRONTEND_URL` (default: `http://localhost:5173`)
-- `DATABASE_URL`
-- `REDIS_URL` (default: `redis://localhost:6379/0`)
-- `JWT_SECRET_KEY`
-- `JWT_ALGORITHM` (default: `HS256`)
-- `ACCESS_TOKEN_EXPIRE_MINUTES` (default: `30`)
-- `REFRESH_TOKEN_EXPIRE_DAYS` (default: `7`)
-- `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default: `30`)
-- `SMTP_HOST` (default: `smtp.gmail.com`)
-- `SMTP_PORT` (default: `587`)
-- `SMTP_USE_TLS` (default: `true`)
-- `MAIL_DEFAULT_SENDER`
-- `MAIL_DEFAULT_PASSWORD`
-- `SMTP_CREDENTIALS_KEY` (para cifrar password SMTP de usuario)
-- `AI_MODEL_NAME` (default: `simple_nn`)
+Valores listos para usar con `docker-compose.yml` incluido en el repo:
+
+```env
+# App
+PROJECT_NAME=Course Manager Backend
+API_V1_PREFIX=/api/v1
+FRONTEND_URL=http://localhost:5173
+
+# Base de datos (coincide con docker-compose.yml)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/course_manager_db
+
+# Redis (coincide con docker-compose.yml)
+REDIS_URL=redis://localhost:6379/0
+
+# JWT — genera un valor aleatorio seguro, p.ej.: openssl rand -hex 32
+JWT_SECRET_KEY=dev_secret_cambia_esto
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30
+
+# SMTP global — en desarrollo puedes usar una cuenta de prueba o dejar vacío
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USE_TLS=true
+MAIL_DEFAULT_SENDER=tu_correo@gmail.com
+MAIL_DEFAULT_PASSWORD=tu_app_password
+
+# Fernet key para cifrar credenciales SMTP por usuario
+# Genera con: just generate-fernet-key
+SMTP_CREDENTIALS_KEY=
+
+# IA
+AI_MODEL_NAME=simple_nn
+```
+
+### Sustituciones para produccion
+
+| Variable | Desarrollo | Produccion |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/course_manager_db` | URL de Neon u otro Postgres gestionado (`postgres://...` tambien funciona, se reescribe automaticamente) |
+| `REDIS_URL` | `redis://localhost:6379/0` | URL de Redis remoto (Upstash, Railway, etc.) |
+| `JWT_SECRET_KEY` | cualquier string | valor aleatorio largo generado con `openssl rand -hex 32` |
+| `FRONTEND_URL` | `http://localhost:5173` | URL publica del frontend (para CORS y links en emails) |
+| `MAIL_DEFAULT_SENDER` / `MAIL_DEFAULT_PASSWORD` | cuenta de prueba | cuenta de produccion o relay SMTP dedicado |
+| `SMTP_CREDENTIALS_KEY` | puede dejarse vacio | clave Fernet generada con `just generate-fernet-key` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | reducir segun politica de seguridad |
 
 Importante sobre SMTP:
 
@@ -140,10 +170,10 @@ Limpiar infraestructura de desarrollo (contenedores, red y volumenes del compose
 just infra-clean
 ```
 
-Para usar esos contenedores en desarrollo, en `.env` usa:
+Para usar esos contenedores en desarrollo, en `.env` usa los valores del bloque de desarrollo de la seccion "Variables de entorno" arriba (o el resumen):
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/course_manager_db
 REDIS_URL=redis://localhost:6379/0
 ```
 
