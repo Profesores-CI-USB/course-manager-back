@@ -31,9 +31,9 @@ generate-fernet-key:
 # Crea o promueve un usuario admin (FULL_NAME es opcional)
 create-admin EMAIL PASSWORD FULL_NAME="":
     source .venv/bin/activate && if [[ -n "{{FULL_NAME}}" ]]; then \
-      python scripts/create_admin.py --email "{{EMAIL}}" --password "{{PASSWORD}}" --full-name "{{FULL_NAME}}"; \
+      PYTHONPATH=. python scripts/create_admin.py --email "{{EMAIL}}" --password "{{PASSWORD}}" --full-name "{{FULL_NAME}}"; \
     else \
-      python scripts/create_admin.py --email "{{EMAIL}}" --password "{{PASSWORD}}"; \
+      PYTHONPATH=. python scripts/create_admin.py --email "{{EMAIL}}" --password "{{PASSWORD}}"; \
     fi
 
 # Aplica todas las migraciones pendientes
