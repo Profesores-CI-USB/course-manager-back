@@ -3,10 +3,11 @@ import io
 import uuid
 from datetime import date
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import UploadFile
 from sqlalchemy import asc, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException
 from app.models import Course, Enrollment, Evaluation, EvaluationGrade, Student, Subject, User
 from app.services.common import _apply_pagination, _is_admin, _resolve_order_column
 from app.schemas.academic import (
@@ -336,10 +337,13 @@ async def list_evaluation_grades(
     ]
 
 
-async def create_subject(db: AsyncSession, payload: SubjectCreate) -> SubjectOut:
+async def create_subject(db: AsyncSession, payload: SubjectCreate, current_user: User) -> SubjectOut:
+    if not _is_admin(current_user):
+        raise ForbiddenException("Solo un admin puede crear materias")
+
     existing = await db.execute(select(Subject).where(Subject.code == payload.code))
     if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe una materia con ese codigo")
+        raise ConflictException("Ya existe una materia con ese codigo")
 
     subject = Subject(code=payload.code, name=payload.name, credits=payload.credits)
     db.add(subject)
@@ -349,22 +353,26 @@ async def create_subject(db: AsyncSession, payload: SubjectCreate) -> SubjectOut
     return SubjectOut(id=subject.id, code=subject.code, name=subject.name, credits=subject.credits)
 
 
-async def create_course(db: AsyncSession, payload: CourseCreate) -> CourseOut:
+async def create_course(db: AsyncSession, payload: CourseCreate, current_user: User) -> CourseOut:
     subject_result = await db.execute(select(Subject).where(Subject.id == payload.subject_id))
     subject = subject_result.scalar_one_or_none()
     if subject is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Materia no encontrada")
+        raise NotFoundException("Materia no encontrada")
 
-    professor_result = await db.execute(select(User).where(User.id == payload.professor_id))
-    professor = professor_result.scalar_one_or_none()
-    if professor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado")
-    if professor.role != "professor":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario indicado no tiene rol professor")
+    if _is_admin(current_user) and payload.professor_id is not None:
+        professor_id = payload.professor_id
+        professor_result = await db.execute(select(User).where(User.id == professor_id))
+        professor = professor_result.scalar_one_or_none()
+        if professor is None:
+            raise NotFoundException("Profesor no encontrado")
+        if professor.role != "professor":
+            raise BadRequestException("El usuario indicado no tiene rol professor")
+    else:
+        professor_id = current_user.id
 
     course = Course(
         subject_id=payload.subject_id,
-        professor_id=payload.professor_id,
+        professor_id=professor_id,
         term=payload.term,
         year=payload.year,
     )
@@ -381,17 +389,20 @@ async def create_course(db: AsyncSession, payload: CourseCreate) -> CourseOut:
     )
 
 
-async def create_student(db: AsyncSession, payload: StudentCreate) -> StudentOut:
+async def create_student(db: AsyncSession, payload: StudentCreate, current_user: User) -> StudentOut:
+    if not _is_admin(current_user):
+        raise ForbiddenException("Solo un admin puede crear estudiantes")
+
     existing_student_card = await db.execute(select(Student).where(Student.student_card == payload.student_card))
     if existing_student_card.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe un estudiante con ese carnet")
+        raise ConflictException("Ya existe un estudiante con ese carnet")
 
     default_email = f"{payload.student_card}@usb.ve"
     student_email = payload.email or default_email
 
     existing_email = await db.execute(select(Student).where(Student.email == student_email))
     if existing_email.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe un estudiante con ese correo")
+        raise ConflictException("Ya existe un estudiante con ese correo")
 
     student = Student(full_name=payload.full_name, student_card=payload.student_card, email=student_email)
     db.add(student)
@@ -406,11 +417,14 @@ async def create_student(db: AsyncSession, payload: StudentCreate) -> StudentOut
     )
 
 
-async def create_evaluation(db: AsyncSession, payload: EvaluationCreate) -> EvaluationOut:
+async def create_evaluation(db: AsyncSession, payload: EvaluationCreate, current_user: User) -> EvaluationOut:
     course_result = await db.execute(select(Course).where(Course.id == payload.course_id))
     course = course_result.scalar_one_or_none()
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
+
+    if not _is_admin(current_user) and course.professor_id != current_user.id:
+        raise ForbiddenException("No tienes permiso para crear evaluaciones en este curso")
 
     evaluation = Evaluation(
         course_id=payload.course_id,
@@ -433,16 +447,19 @@ async def create_evaluation(db: AsyncSession, payload: EvaluationCreate) -> Eval
     )
 
 
-async def create_enrollment(db: AsyncSession, payload: EnrollmentCreate) -> EnrollmentOut:
+async def create_enrollment(db: AsyncSession, payload: EnrollmentCreate, current_user: User) -> EnrollmentOut:
     course_result = await db.execute(select(Course).where(Course.id == payload.course_id))
     course = course_result.scalar_one_or_none()
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
+
+    if not _is_admin(current_user) and course.professor_id != current_user.id:
+        raise ForbiddenException("No tienes permiso para inscribir estudiantes en este curso")
 
     student_result = await db.execute(select(Student).where(Student.id == payload.student_id))
     student = student_result.scalar_one_or_none()
     if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estudiante no encontrado")
+        raise NotFoundException("Estudiante no encontrado")
 
     existing = await db.execute(
         select(Enrollment).where(
@@ -451,7 +468,7 @@ async def create_enrollment(db: AsyncSession, payload: EnrollmentCreate) -> Enro
         )
     )
     if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El estudiante ya esta inscrito en este curso")
+        raise ConflictException("El estudiante ya esta inscrito en este curso")
 
     enrollment = Enrollment(course_id=payload.course_id, student_id=payload.student_id)
     db.add(enrollment)
@@ -466,28 +483,27 @@ async def create_enrollment(db: AsyncSession, payload: EnrollmentCreate) -> Enro
     )
 
 
-async def create_evaluation_grade(db: AsyncSession, payload: EvaluationGradeCreate) -> EvaluationGradeOut:
+async def create_evaluation_grade(db: AsyncSession, payload: EvaluationGradeCreate, current_user: User) -> EvaluationGradeOut:
     evaluation_result = await db.execute(select(Evaluation).where(Evaluation.id == payload.evaluation_id))
     evaluation = evaluation_result.scalar_one_or_none()
     if evaluation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluacion no encontrada")
+        raise NotFoundException("Evaluacion no encontrada")
 
     enrollment_result = await db.execute(select(Enrollment).where(Enrollment.id == payload.enrollment_id))
     enrollment = enrollment_result.scalar_one_or_none()
     if enrollment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inscripcion no encontrada")
+        raise NotFoundException("Inscripcion no encontrada")
+
+    course_result = await db.execute(select(Course).where(Course.id == evaluation.course_id))
+    course = course_result.scalar_one_or_none()
+    if not _is_admin(current_user) and (course is None or course.professor_id != current_user.id):
+        raise ForbiddenException("No tienes permiso para registrar notas en este curso")
 
     if enrollment.course_id != evaluation.course_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La evaluacion y la inscripcion deben pertenecer al mismo curso",
-        )
+        raise BadRequestException("La evaluacion y la inscripcion deben pertenecer al mismo curso")
 
     if payload.grade > evaluation.percentage:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nota no puede ser mayor que el porcentaje de la evaluacion",
-        )
+        raise BadRequestException("La nota no puede ser mayor que el porcentaje de la evaluacion")
 
     existing = await db.execute(
         select(EvaluationGrade).where(
@@ -496,10 +512,7 @@ async def create_evaluation_grade(db: AsyncSession, payload: EvaluationGradeCrea
         )
     )
     if existing.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe una nota para esta evaluacion e inscripcion",
-        )
+        raise ConflictException("Ya existe una nota para esta evaluacion e inscripcion")
 
     evaluation_grade = EvaluationGrade(
         evaluation_id=payload.evaluation_id,
@@ -527,36 +540,30 @@ async def bulk_enroll_students_csv(
     course_result = await db.execute(select(Course).where(Course.id == course_id))
     course = course_result.scalar_one_or_none()
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and course.professor_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el profesor encargado o un admin puede hacer carga masiva en este curso",
-        )
+        raise ForbiddenException("Solo el profesor encargado o un admin puede hacer carga masiva en este curso")
 
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo debe ser CSV")
+        raise BadRequestException("El archivo debe ser CSV")
 
     raw = await file.read()
     try:
         decoded = raw.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se pudo leer el CSV en UTF-8") from exc
+        raise BadRequestException("No se pudo leer el CSV en UTF-8") from exc
 
     reader = csv.DictReader(io.StringIO(decoded))
     if reader.fieldnames is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CSV sin encabezados")
+        raise BadRequestException("CSV sin encabezados")
 
     normalized_headers = {h.strip().lower(): h for h in reader.fieldnames if h}
     student_card_header = normalized_headers.get("carnet") or normalized_headers.get("student_card")
     full_name_header = normalized_headers.get("nombre") or normalized_headers.get("full_name") or normalized_headers.get("name")
 
     if not student_card_header or not full_name_header:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CSV invalido: requiere columnas carnet y nombre",
-        )
+        raise BadRequestException("CSV invalido: requiere columnas carnet y nombre")
 
     rows_total = 0
     students_created = 0
@@ -626,15 +633,19 @@ async def update_subject(
     db: AsyncSession,
     subject_id: uuid.UUID,
     payload: SubjectUpdate,
+    current_user: User,
 ) -> SubjectOut:
     subject_result = await db.execute(select(Subject).where(Subject.id == subject_id))
     subject = subject_result.scalar_one_or_none()
     if subject is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Materia no encontrada")
+        raise NotFoundException("Materia no encontrada")
+
+    if not _is_admin(current_user):
+        raise ForbiddenException("Solo un admin puede actualizar materias")
 
     existing_code = await db.execute(select(Subject).where(Subject.code == payload.code, Subject.id != subject_id))
     if existing_code.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe una materia con ese codigo")
+        raise ConflictException("Ya existe una materia con ese codigo")
 
     subject.code = payload.code
     subject.name = payload.name
@@ -656,24 +667,24 @@ async def update_course(
     course_result = await db.execute(select(Course).where(Course.id == course_id))
     course = course_result.scalar_one_or_none()
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para actualizar este curso")
+        raise ForbiddenException("No tienes permiso para actualizar este curso")
 
     subject_result = await db.execute(select(Subject).where(Subject.id == payload.subject_id))
     if subject_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Materia no encontrada")
+        raise NotFoundException("Materia no encontrada")
 
     professor_result = await db.execute(select(User).where(User.id == payload.professor_id))
     professor = professor_result.scalar_one_or_none()
     if professor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profesor no encontrado")
+        raise NotFoundException("Profesor no encontrado")
     if professor.role != "professor":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario indicado no tiene rol professor")
+        raise BadRequestException("El usuario indicado no tiene rol professor")
 
     if not _is_admin(current_user) and payload.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes reasignar cursos a otro profesor")
+        raise ForbiddenException("No puedes reasignar cursos a otro profesor")
 
     course.subject_id = payload.subject_id
     course.professor_id = payload.professor_id
@@ -697,11 +708,15 @@ async def update_student(
     db: AsyncSession,
     student_id: uuid.UUID,
     payload: StudentUpdate,
+    current_user: User,
 ) -> StudentOut:
     student_result = await db.execute(select(Student).where(Student.id == student_id))
     student = student_result.scalar_one_or_none()
     if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estudiante no encontrado")
+        raise NotFoundException("Estudiante no encontrado")
+
+    if not _is_admin(current_user):
+        raise ForbiddenException("Solo un admin puede actualizar estudiantes")
 
     target_email = payload.email or f"{payload.student_card}@usb.ve"
 
@@ -709,11 +724,11 @@ async def update_student(
         select(Student).where(Student.student_card == payload.student_card, Student.id != student_id)
     )
     if existing_card.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe un estudiante con ese carnet")
+        raise ConflictException("Ya existe un estudiante con ese carnet")
 
     existing_email = await db.execute(select(Student).where(Student.email == target_email, Student.id != student_id))
     if existing_email.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe un estudiante con ese correo")
+        raise ConflictException("Ya existe un estudiante con ese correo")
 
     student.full_name = payload.full_name
     student.student_card = payload.student_card
@@ -740,23 +755,23 @@ async def update_evaluation(
     evaluation_result = await db.execute(select(Evaluation).where(Evaluation.id == evaluation_id))
     evaluation = evaluation_result.scalar_one_or_none()
     if evaluation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluacion no encontrada")
+        raise NotFoundException("Evaluacion no encontrada")
 
     current_course_result = await db.execute(select(Course).where(Course.id == evaluation.course_id))
     current_course = current_course_result.scalar_one_or_none()
     if current_course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and current_course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para actualizar esta evaluacion")
+        raise ForbiddenException("No tienes permiso para actualizar esta evaluacion")
 
     new_course_result = await db.execute(select(Course).where(Course.id == payload.course_id))
     new_course = new_course_result.scalar_one_or_none()
     if new_course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and new_course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes mover la evaluacion a un curso ajeno")
+        raise ForbiddenException("No puedes mover la evaluacion a un curso ajeno")
 
     evaluation.course_id = payload.course_id
     evaluation.description = payload.description
@@ -787,27 +802,27 @@ async def update_enrollment(
     enrollment_result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
     enrollment = enrollment_result.scalar_one_or_none()
     if enrollment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inscripcion no encontrada")
+        raise NotFoundException("Inscripcion no encontrada")
 
     current_course_result = await db.execute(select(Course).where(Course.id == enrollment.course_id))
     current_course = current_course_result.scalar_one_or_none()
     if current_course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and current_course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para actualizar esta inscripcion")
+        raise ForbiddenException("No tienes permiso para actualizar esta inscripcion")
 
     new_course_result = await db.execute(select(Course).where(Course.id == payload.course_id))
     new_course = new_course_result.scalar_one_or_none()
     if new_course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     student_result = await db.execute(select(Student).where(Student.id == payload.student_id))
     if student_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estudiante no encontrado")
+        raise NotFoundException("Estudiante no encontrado")
 
     if not _is_admin(current_user) and new_course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes mover la inscripcion a un curso ajeno")
+        raise ForbiddenException("No puedes mover la inscripcion a un curso ajeno")
 
     duplicate = await db.execute(
         select(Enrollment).where(
@@ -817,7 +832,7 @@ async def update_enrollment(
         )
     )
     if duplicate.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ya existe esa inscripcion curso-estudiante")
+        raise ConflictException("Ya existe esa inscripcion curso-estudiante")
 
     enrollment.course_id = payload.course_id
     enrollment.student_id = payload.student_id
@@ -844,50 +859,44 @@ async def update_evaluation_grade(
     evaluation_grade_result = await db.execute(select(EvaluationGrade).where(EvaluationGrade.id == evaluation_grade_id))
     evaluation_grade = evaluation_grade_result.scalar_one_or_none()
     if evaluation_grade is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nota de evaluacion no encontrada")
+        raise NotFoundException("Nota de evaluacion no encontrada")
 
     current_evaluation_result = await db.execute(select(Evaluation).where(Evaluation.id == evaluation_grade.evaluation_id))
     current_evaluation = current_evaluation_result.scalar_one_or_none()
     if current_evaluation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluacion no encontrada")
+        raise NotFoundException("Evaluacion no encontrada")
 
     current_course_result = await db.execute(select(Course).where(Course.id == current_evaluation.course_id))
     current_course = current_course_result.scalar_one_or_none()
     if current_course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and current_course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para actualizar esta nota")
+        raise ForbiddenException("No tienes permiso para actualizar esta nota")
 
     evaluation_result = await db.execute(select(Evaluation).where(Evaluation.id == payload.evaluation_id))
     evaluation = evaluation_result.scalar_one_or_none()
     if evaluation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluacion no encontrada")
+        raise NotFoundException("Evaluacion no encontrada")
 
     enrollment_result = await db.execute(select(Enrollment).where(Enrollment.id == payload.enrollment_id))
     enrollment = enrollment_result.scalar_one_or_none()
     if enrollment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inscripcion no encontrada")
+        raise NotFoundException("Inscripcion no encontrada")
 
     if enrollment.course_id != evaluation.course_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La evaluacion y la inscripcion deben pertenecer al mismo curso",
-        )
+        raise BadRequestException("La evaluacion y la inscripcion deben pertenecer al mismo curso")
 
     destination_course_result = await db.execute(select(Course).where(Course.id == evaluation.course_id))
     destination_course = destination_course_result.scalar_one_or_none()
     if destination_course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso no encontrado")
+        raise NotFoundException("Curso no encontrado")
 
     if not _is_admin(current_user) and destination_course.professor_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes mover la nota a un curso ajeno")
+        raise ForbiddenException("No puedes mover la nota a un curso ajeno")
 
     if payload.grade > evaluation.percentage:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nota no puede ser mayor que el porcentaje de la evaluacion",
-        )
+        raise BadRequestException("La nota no puede ser mayor que el porcentaje de la evaluacion")
 
     duplicate = await db.execute(
         select(EvaluationGrade).where(
@@ -897,10 +906,7 @@ async def update_evaluation_grade(
         )
     )
     if duplicate.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe una nota para esta evaluacion e inscripcion",
-        )
+        raise ConflictException("Ya existe una nota para esta evaluacion e inscripcion")
 
     evaluation_grade.evaluation_id = payload.evaluation_id
     evaluation_grade.enrollment_id = payload.enrollment_id

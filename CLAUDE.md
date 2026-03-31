@@ -77,6 +77,25 @@ Per-user SMTP credentials are stored encrypted with Fernet (`SMTP_CREDENTIALS_KE
 
 Alembic is the source of truth for the production schema. For NOT NULL column additions: add as nullable → deploy + backfill → add NOT NULL constraint in a follow-up migration. Use `just migrate-stamp HEAD` to resolve duplicate-table errors when the schema already exists.
 
+### Documentation
+
+The `docs/` folder contains one Markdown file per module:
+
+| File | Module |
+|---|---|
+| `docs/index.md` | Overview, error codes, conventions |
+| `docs/auth.md` | `/api/v1/auth` — login, tokens, passwords |
+| `docs/users.md` | `/api/v1/users` — profile, SMTP credentials |
+| `docs/academic.md` | `/api/v1/academic` — subjects, courses, students, evaluations, enrollments, grades |
+| `docs/mail.md` | `/api/v1/mail` — email sending |
+| `docs/ai.md` | `/api/v1/ai` — model inference |
+| `docs/health.md` | `/health` — health check |
+
+**Keep docs up to date.** When adding, removing, or modifying an endpoint:
+- Update the relevant `docs/<module>.md` file.
+- If the change affects auth requirements, RBAC rules, request/response shapes, or error cases, reflect it in the docs in the same commit.
+- If a new router is created, create a new `docs/<module>.md` and add it to the table in `docs/index.md`.
+
 ### Deployment
 
 - **Local infra:** Docker Compose (Postgres 16, Redis 7).

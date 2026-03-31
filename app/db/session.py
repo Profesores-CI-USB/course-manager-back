@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 import redis.asyncio as redis
 
 from app.core.config import settings
-from app.db.base import Base
 
 
 engine = create_async_engine(settings.database_url, future=True)
@@ -20,10 +19,7 @@ async def get_redis():
 
 
 async def init_models() -> None:
-    from app import models  # noqa: F401
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    from app import models  # noqa: F401 — registra los modelos en el mapper de SQLAlchemy
 
 
 async def close_redis() -> None:

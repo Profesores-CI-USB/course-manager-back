@@ -63,7 +63,7 @@ class SubjectOut(BaseModel):
 
 class CourseCreate(BaseModel):
     subject_id: UUID
-    professor_id: UUID
+    professor_id: UUID | None = None  # Admin puede asignar otro profesor; si es None se usa el usuario actual
     term: Literal["april-july", "january-march", "september-december", "summer"]
     year: int
 

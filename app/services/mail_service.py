@@ -2,9 +2,8 @@ import smtplib
 from dataclasses import dataclass
 from email.message import EmailMessage
 
-from fastapi import HTTPException, status
-
 from app.core.config import settings
+from app.core.exceptions import BadGatewayException, BadRequestException
 from app.core.security import decrypt_secret
 from app.models import User
 
@@ -23,7 +22,7 @@ def get_smtp_config_for_user(user: User) -> SMTPConfig:
     if user.smtp_email and user.smtp_password_encrypted:
         password = decrypt_secret(user.smtp_password_encrypted)
         if not password:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Credenciales SMTP del usuario incompletas")
+            raise BadRequestException("Credenciales SMTP del usuario incompletas")
 
         return SMTPConfig(
             host=settings.smtp_host,
@@ -35,10 +34,7 @@ def get_smtp_config_for_user(user: User) -> SMTPConfig:
         )
 
     if not settings.mail_default_sender or not settings.mail_default_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No hay SMTP por usuario ni SMTP global configurado",
-        )
+        raise BadRequestException("No hay SMTP por usuario ni SMTP global configurado")
 
     return SMTPConfig(
         host=settings.smtp_host,
@@ -64,7 +60,4 @@ def send_email(config: SMTPConfig, to_email: str, subject: str, body: str) -> No
             server.login(config.username, config.password)
             server.send_message(message)
     except smtplib.SMTPException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Error enviando correo SMTP: {exc}",
-        ) from exc
+        raise BadGatewayException(f"Error enviando correo SMTP: {exc}") from exc

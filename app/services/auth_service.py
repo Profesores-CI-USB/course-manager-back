@@ -2,11 +2,11 @@ from datetime import timedelta
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
 from app.core.security import (
     create_access_token,
     create_password_reset_token,
@@ -35,10 +35,7 @@ from app.services.mail_service import SMTPConfig, send_email
 
 def _get_recovery_smtp_config() -> SMTPConfig:
     if not settings.mail_default_sender or not settings.mail_default_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="SMTP global no configurado para recuperación de contraseña",
-        )
+        raise BadRequestException("SMTP global no configurado para recuperación de contraseña")
 
     return SMTPConfig(
         host=settings.smtp_host,
@@ -63,14 +60,11 @@ def _to_user_out(user: User) -> UserOut:
 
 async def create_user(db: AsyncSession, current_user: User, payload: RegisterRequest) -> UserOut:
     if not _is_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo un admin puede crear usuarios",
-        )
+        raise ForbiddenException("Solo un admin puede crear usuarios")
 
     exists = await db.execute(select(User).where(User.email == payload.email))
     if exists.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El correo ya está registrado")
+        raise ConflictException("El correo ya está registrado")
 
     user = User(
         email=payload.email,
@@ -89,7 +83,7 @@ async def login(db: AsyncSession, redis, payload: LoginRequest) -> AuthResponse:
     user = query.scalar_one_or_none()
 
     if user is None or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
+        raise UnauthorizedException("Credenciales inválidas")
 
     access_token = create_access_token(str(user.id))
     refresh_token, refresh_jti = create_refresh_token(str(user.id))
@@ -106,17 +100,17 @@ async def login(db: AsyncSession, redis, payload: LoginRequest) -> AuthResponse:
 async def refresh_tokens(redis, payload: RefreshRequest) -> TokenPair:
     token_payload = decode_token(payload.refresh_token)
     if token_payload.get("type") != "refresh":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token inválido")
+        raise UnauthorizedException("Refresh token inválido")
 
     subject = token_payload.get("sub")
     old_jti = token_payload.get("jti")
     if not subject or not old_jti:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token inválido")
+        raise UnauthorizedException("Refresh token inválido")
 
     key = f"refresh:{old_jti}"
     exists = await redis.exists(key)
     if not exists:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revocado")
+        raise UnauthorizedException("Refresh token revocado")
 
     await redis.delete(key)
 
@@ -131,7 +125,7 @@ async def refresh_tokens(redis, payload: RefreshRequest) -> TokenPair:
 async def logout(redis, payload: LogoutRequest) -> dict[str, str]:
     token_payload = decode_token(payload.refresh_token)
     if token_payload.get("type") != "refresh":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token inválido")
+        raise UnauthorizedException("Refresh token inválido")
 
     jti = token_payload.get("jti")
     if jti:
@@ -171,21 +165,21 @@ async def forgot_password(db: AsyncSession, payload: ForgotPasswordRequest) -> M
 async def reset_password(db: AsyncSession, payload: ResetPasswordRequest) -> MessageResponse:
     token_payload = decode_token(payload.token)
     if token_payload.get("type") != "password_reset":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de recuperación inválido")
+        raise UnauthorizedException("Token de recuperación inválido")
 
     subject = token_payload.get("sub")
     if not subject:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de recuperación inválido")
+        raise UnauthorizedException("Token de recuperación inválido")
 
     try:
         user_id = UUID(subject)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de recuperación inválido") from exc
+        raise UnauthorizedException("Token de recuperación inválido") from exc
 
     query = await db.execute(select(User).where(User.id == user_id))
     user = query.scalar_one_or_none()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+        raise NotFoundException("Usuario no encontrado")
 
     user.hashed_password = hash_password(payload.new_password)
     db.add(user)
@@ -196,13 +190,10 @@ async def reset_password(db: AsyncSession, payload: ResetPasswordRequest) -> Mes
 
 async def change_password(db: AsyncSession, current_user: User, payload: ChangePasswordRequest) -> MessageResponse:
     if not verify_password(payload.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Contraseña actual inválida")
+        raise UnauthorizedException("Contraseña actual inválida")
 
     if payload.current_password == payload.new_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contraseña debe ser diferente a la actual",
-        )
+        raise BadRequestException("La nueva contraseña debe ser diferente a la actual")
 
     current_user.hashed_password = hash_password(payload.new_password)
     db.add(current_user)

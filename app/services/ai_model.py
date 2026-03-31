@@ -1,8 +1,7 @@
 import math
 
-from fastapi import HTTPException, status
-
 from app.core.config import settings
+from app.core.exceptions import BadRequestException, InternalException
 
 
 class BaseInferenceModel:
@@ -30,10 +29,7 @@ class SimpleNeuralNetModel(BaseInferenceModel):
 
     def predict(self, features: list[float]) -> dict:
         if len(features) != 3:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El modelo simple_nn requiere exactamente 3 features",
-            )
+            raise BadRequestException("El modelo simple_nn requiere exactamente 3 features")
 
         hidden_layer = []
         for neuron_weights, neuron_bias in zip(self.hidden_weights, self.hidden_bias):
@@ -62,8 +58,5 @@ MODELS: dict[str, BaseInferenceModel] = {
 def get_active_model() -> BaseInferenceModel:
     model = MODELS.get(settings.ai_model_name)
     if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Modelo de IA '{settings.ai_model_name}' no registrado",
-        )
+        raise InternalException(f"Modelo de IA '{settings.ai_model_name}' no registrado")
     return model

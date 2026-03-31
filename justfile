@@ -86,3 +86,11 @@ migrate-up-to REVISION:
 
 migrate-down-to REVISION:
   source .venv/bin/activate && alembic downgrade {{REVISION}}
+
+# Verifica violaciones de arquitectura en app/
+lint-arch:
+  source .venv/bin/activate && python scripts/check_arch.py
+
+# Verifica arquitectura en modo estricto (falla también en warnings)
+lint-arch-strict:
+  source .venv/bin/activate && python scripts/check_arch.py --strict

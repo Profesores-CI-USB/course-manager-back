@@ -198,54 +198,54 @@ async def list_evaluation_grades(
 async def create_subject(
     payload: SubjectCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.create_subject(db=db, payload=payload)
+    return await academic_service.create_subject(db=db, payload=payload, current_user=current_user)
 
 
 @router.post("/courses", response_model=CourseOut, status_code=status.HTTP_201_CREATED)
 async def create_course(
     payload: CourseCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.create_course(db=db, payload=payload)
+    return await academic_service.create_course(db=db, payload=payload, current_user=current_user)
 
 
 @router.post("/students", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
 async def create_student(
     payload: StudentCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.create_student(db=db, payload=payload)
+    return await academic_service.create_student(db=db, payload=payload, current_user=current_user)
 
 
 @router.post("/evaluations", response_model=EvaluationOut, status_code=status.HTTP_201_CREATED)
 async def create_evaluation(
     payload: EvaluationCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.create_evaluation(db=db, payload=payload)
+    return await academic_service.create_evaluation(db=db, payload=payload, current_user=current_user)
 
 
 @router.post("/enrollments", response_model=EnrollmentOut, status_code=status.HTTP_201_CREATED)
 async def create_enrollment(
     payload: EnrollmentCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.create_enrollment(db=db, payload=payload)
+    return await academic_service.create_enrollment(db=db, payload=payload, current_user=current_user)
 
 
 @router.post("/evaluation-grades", response_model=EvaluationGradeOut, status_code=status.HTTP_201_CREATED)
 async def create_evaluation_grade(
     payload: EvaluationGradeCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.create_evaluation_grade(db=db, payload=payload)
+    return await academic_service.create_evaluation_grade(db=db, payload=payload, current_user=current_user)
 
 
 @router.post("/enrollments/bulk-csv", response_model=BulkEnrollmentResult, status_code=status.HTTP_201_CREATED)
@@ -268,9 +268,9 @@ async def update_subject(
     subject_id: uuid.UUID,
     payload: SubjectUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.update_subject(db=db, subject_id=subject_id, payload=payload)
+    return await academic_service.update_subject(db=db, subject_id=subject_id, payload=payload, current_user=current_user)
 
 
 @router.put("/courses/{course_id}", response_model=CourseOut)
@@ -293,9 +293,9 @@ async def update_student(
     student_id: uuid.UUID,
     payload: StudentUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return await academic_service.update_student(db=db, student_id=student_id, payload=payload)
+    return await academic_service.update_student(db=db, student_id=student_id, payload=payload, current_user=current_user)
 
 
 @router.put("/evaluations/{evaluation_id}", response_model=EvaluationOut)
