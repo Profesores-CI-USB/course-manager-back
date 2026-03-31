@@ -89,6 +89,7 @@ The `docs/` folder contains one Markdown file per module:
 | `docs/academic.md` | `/api/v1/academic` — subjects, courses, students, evaluations, enrollments, grades |
 | `docs/mail.md` | `/api/v1/mail` — email sending |
 | `docs/ai.md` | `/api/v1/ai` — model inference |
+| `docs/stats.md` | `/api/v1/stats` — course statistics, AI model configs, predictions |
 | `docs/health.md` | `/health` — health check |
 
 **Keep docs up to date.** When adding, removing, or modifying an endpoint:

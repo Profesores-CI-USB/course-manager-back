@@ -173,14 +173,16 @@ def check_file(path: Path, result: CheckResult) -> None:
             if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
                 fn_name = node.name
                 if any(verb in fn_name for verb in ("create_", "update_", "delete_", "remove_")):
-                    # Check if function body references _is_admin or owner_id
+                    # Check if function body references any ownership/admin marker
+                    _RBAC_MARKERS = ("_is_admin", "owner_id", "created_by", "professor_id")
                     fn_source = ast.unparse(node)
-                    if "_is_admin" not in fn_source and "owner_id" not in fn_source:
+                    if not any(marker in fn_source for marker in _RBAC_MARKERS):
                         result.add(
                             "WARNING", path, node.lineno,
                             "MISSING_RBAC",
                             f"`{fn_name}()` may be missing RBAC check "
-                            "(_is_admin or owner_id). Verify authorization is enforced."
+                            "(_is_admin, owner_id, created_by, or professor_id). "
+                            "Verify authorization is enforced."
                         )
 
     # ── RULE: Pydantic v1 orm_mode ────────────────────────────────────────────

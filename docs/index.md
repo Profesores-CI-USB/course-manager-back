@@ -30,6 +30,7 @@ El token se obtiene en `POST /api/v1/auth/login`.
 | [academic.md](academic.md) | Materias, cursos, estudiantes, evaluaciones, inscripciones y notas | `/api/v1/academic` |
 | [mail.md](mail.md) | Envío de correos por SMTP | `/api/v1/mail` |
 | [ai.md](ai.md) | Predicciones con modelos de IA | `/api/v1/ai` |
+| [stats.md](stats.md) | Estadísticas de cursos, configuración y entrenamiento de modelos IA, predicciones | `/api/v1/stats` |
 | [health.md](health.md) | Estado del servicio | `/health` |
 
 ## Códigos de error comunes

@@ -15,7 +15,7 @@ from app.core.exceptions import (
     UnauthorizedException,
 )
 from app.db.session import close_redis, init_models, redis_client
-from app.routers import academic_router, ai_router, auth_router, health_router, mail_router, users_router
+from app.routers import academic_router, ai_router, auth_router, health_router, mail_router, stats_router, users_router
 
 _STATUS_MAP: dict[type[AppException], int] = {
     NotFoundException: 404,
@@ -55,6 +55,7 @@ app.include_router(users_router, prefix=settings.api_v1_prefix)
 app.include_router(mail_router, prefix=settings.api_v1_prefix)
 app.include_router(ai_router, prefix=settings.api_v1_prefix)
 app.include_router(academic_router, prefix=settings.api_v1_prefix)
+app.include_router(stats_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

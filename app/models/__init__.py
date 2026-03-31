@@ -1,4 +1,5 @@
 from app.models.academic import Course, Enrollment, Evaluation, EvaluationGrade, Student, Subject
+from app.models.ai_config import AIModelConfig
 from app.models.user import User
 
 __all__ = [
@@ -9,4 +10,5 @@ __all__ = [
 	"Evaluation",
 	"Enrollment",
 	"EvaluationGrade",
+	"AIModelConfig",
 ]

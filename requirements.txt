@@ -11,3 +11,5 @@ python-dotenv
 email-validator
 cryptography
 python-multipart
+scikit-learn
+numpy
