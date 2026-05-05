@@ -1,12 +1,15 @@
 import uuid
-from datetime import datetime
-from typing import Literal
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import CheckConstraint, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.academic import Course
 
 
 class User(Base):
@@ -29,11 +32,11 @@ class User(Base):
     smtp_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     smtp_password_encrypted: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
