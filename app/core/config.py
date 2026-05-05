@@ -40,6 +40,8 @@ class Settings(BaseSettings):
 
     ai_model_name: str = Field(default="simple_nn", validation_alias="AI_MODEL_NAME")
 
+    environment: str = Field(default="development", validation_alias="ENVIRONMENT")
+
     @field_validator("database_url", mode="before")
     @classmethod
     def ensure_async_database_url(cls, value: str) -> str:

@@ -15,7 +15,15 @@ from app.core.exceptions import (
     UnauthorizedException,
 )
 from app.db.session import close_redis, init_models, redis_client
-from app.routers import academic_router, ai_router, auth_router, health_router, mail_router, stats_router, users_router
+from app.routers import (
+    academic_router,
+    ai_router,
+    auth_router,
+    health_router,
+    mail_router,
+    stats_router,
+    users_router,
+)
 
 _STATUS_MAP: dict[type[AppException], int] = {
     NotFoundException: 404,
@@ -31,7 +39,7 @@ _STATUS_MAP: dict[type[AppException], int] = {
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_models()
-    await redis_client.ping()
+    await redis_client.ping()  # type: ignore[misc]
     yield
     await close_redis()
 
@@ -48,6 +56,7 @@ app = FastAPI(
 async def app_exception_handler(request, exc: AppException) -> JSONResponse:
     status_code = _STATUS_MAP.get(type(exc), 500)
     return JSONResponse(status_code=status_code, content={"detail": exc.detail})
+
 
 app.include_router(health_router)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)

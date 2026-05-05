@@ -2,6 +2,8 @@ import smtplib
 from dataclasses import dataclass
 from email.message import EmailMessage
 
+import markdown as md
+
 from app.core.config import settings
 from app.core.exceptions import BadGatewayException, BadRequestException
 from app.core.security import decrypt_secret
@@ -46,12 +48,24 @@ def get_smtp_config_for_user(user: User) -> SMTPConfig:
     )
 
 
-def send_email(config: SMTPConfig, to_email: str, subject: str, body: str) -> None:
+def markdown_to_html(text: str) -> str:
+    return md.markdown(text, extensions=["extra", "nl2br"])
+
+
+def send_email(
+    config: SMTPConfig,
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: str | None = None,
+) -> None:
     message = EmailMessage()
     message["From"] = config.from_email
     message["To"] = to_email
     message["Subject"] = subject
     message.set_content(body)
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
 
     try:
         with smtplib.SMTP(config.host, config.port, timeout=20) as server:
