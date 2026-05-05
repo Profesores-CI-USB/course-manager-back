@@ -21,7 +21,8 @@ Envía un correo desde la cuenta SMTP del usuario autenticado.
 {
   "to_email": "destinatario@ejemplo.com",
   "subject": "Asunto del correo",
-  "body": "Contenido del mensaje en texto plano."
+  "body": "# Hola\n\nContenido en **Markdown**.",
+  "content_type": "markdown"
 }
 ```
 
@@ -29,7 +30,8 @@ Envía un correo desde la cuenta SMTP del usuario autenticado.
 |---|---|---|---|
 | `to_email` | string (email) | Sí | Destinatario |
 | `subject` | string | Sí | Asunto |
-| `body` | string | Sí | Cuerpo en texto plano |
+| `body` | string | Sí | Cuerpo en Markdown o HTML según `content_type` |
+| `content_type` | `"markdown"` \| `"html"` | No | Formato del cuerpo. Default: `"markdown"` |
 
 **Respuesta 200:**
 ```json

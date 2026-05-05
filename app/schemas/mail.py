@@ -7,13 +7,11 @@ class SendMailRequest(BaseModel):
     to_email: EmailStr
     subject: str
     body: str
-
-
-class TestMailRequest(BaseModel):
-    to_email: EmailStr
-    subject: str
-    body: str
     content_type: Literal["markdown", "html"] = "markdown"
+
+
+class TestMailRequest(SendMailRequest):
+    pass
 
 
 class SendMailResponse(BaseModel):

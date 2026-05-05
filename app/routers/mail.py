@@ -18,8 +18,9 @@ async def send_mail(
     payload: SendMailRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> SendMailResponse:
+    html_body = markdown_to_html(payload.body) if payload.content_type == "markdown" else payload.body
     config = get_smtp_config_for_user(current_user)
-    send_email(config=config, to_email=payload.to_email, subject=payload.subject, body=payload.body)
+    send_email(config=config, to_email=payload.to_email, subject=payload.subject, body=payload.body, html_body=html_body)
     return SendMailResponse(message="Correo enviado correctamente")
 
 
